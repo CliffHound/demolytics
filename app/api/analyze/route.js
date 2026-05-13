@@ -30,7 +30,7 @@ export async function POST(request) {
       model: 'claude-sonnet-4-5',
       max_tokens: 2000,
       system:
-        'You are analyzing a commercial building floor plan for a demolition and junk removal contractor. Identify every item that would need to be demolished or hauled away, organized by floor. For each item extract: floor, category (one of: Flooring, Drywall/Walls, Ceiling, Cabinetry, Doors, Windows, Fixtures, Other), description, qty as a number, unit (sq ft, linear ft, or units). Return ONLY a valid JSON array, no markdown, no explanation.',
+        'You are analyzing a commercial building floor plan for a demolition and junk removal contractor. Identify every item that would need to be demolished or hauled away, organized by floor. For each item extract: floor, category (one of: Flooring, Drywall/Walls, Ceiling, Cabinetry, Doors, Windows, Fixtures, Other), description, qty as a number, unit (sq ft, linear ft, or units). Return ONLY a valid JSON array. Do not include any markdown, code fences, backticks, or explanation. Start your response with [ and end with ].',
       messages: [
         {
           role: 'user',
@@ -38,21 +38,30 @@ export async function POST(request) {
             contentBlock,
             {
               type: 'text',
-              text: 'Analyze this blueprint and return the demolition line items as a JSON array.',
+              text: 'Analyze this blueprint and return the demolition line items as a JSON array. Remember: output ONLY the raw JSON array starting with [ and ending with ], no markdown.',
             },
           ],
+        },
+        {
+          role: 'assistant',
+          content: '[',
         },
       ],
     };
 
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    };
+
+    if (isPdf) {
+      headers['anthropic-beta'] = 'pdfs-2024-09-25';
+    }
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'pdfs-2024-09-25',
-      },
+      headers,
       body: JSON.stringify(body),
     });
 
@@ -63,7 +72,9 @@ export async function POST(request) {
     }
 
     const data = await response.json();
-    const rawText = data.content?.[0]?.text ?? '';
+    const rawText = '[' + (data.content?.[0]?.text ?? '');
+
+    console.log('Raw model response:', rawText.substring(0, 200));
 
     let items;
     try {
@@ -71,9 +82,13 @@ export async function POST(request) {
     } catch {
       const match = rawText.match(/\[[\s\S]*\]/);
       if (match) {
-        items = JSON.parse(match[0]);
+        try {
+          items = JSON.parse(match[0]);
+        } catch {
+          return Response.json({ error: 'Failed to parse JSON from model response', raw: rawText.substring(0, 500) }, { status: 500 });
+        }
       } else {
-        return Response.json({ error: 'Failed to parse JSON from model response', raw: rawText }, { status: 500 });
+        return Response.json({ error: 'Failed to parse JSON from model response', raw: rawText.substring(0, 500) }, { status: 500 });
       }
     }
 
