@@ -1,0 +1,4 @@
+{
+  "/api/verify-code/route": "app/api/verify-code/route.js",
+  "/page": "app/page.js"
+}
