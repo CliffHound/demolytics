@@ -30,7 +30,7 @@ export async function POST(request) {
       model: 'claude-sonnet-4-5',
       max_tokens: 2000,
       system:
-        'You are analyzing a commercial building floor plan for a demolition and junk removal contractor. Identify every item that would need to be demolished or hauled away, organized by floor. For each item extract: floor, category (one of: Flooring, Drywall/Walls, Ceiling, Cabinetry, Doors, Windows, Fixtures, Other), description, qty as a number, unit (sq ft, linear ft, or units). Return ONLY a valid JSON array. Do not include any markdown, code fences, backticks, or explanation. Start your response with [ and end with ].',
+        'You are analyzing a commercial building floor plan for a demolition and junk removal contractor. Identify every item that would need to be demolished or hauled away, organized by floor. For each item extract: floor (string), category (one of: Flooring, Drywall/Walls, Ceiling, Cabinetry, Doors, Windows, Fixtures, Other), description (string), qty (number), unit (sq ft, linear ft, or units). You MUST return ONLY a raw JSON array. No markdown, no code blocks, no backticks, no explanation. Just the JSON array.',
       messages: [
         {
           role: 'user',
@@ -38,13 +38,9 @@ export async function POST(request) {
             contentBlock,
             {
               type: 'text',
-              text: 'Analyze this blueprint and return the demolition line items as a JSON array. Remember: output ONLY the raw JSON array starting with [ and ending with ], no markdown.',
+              text: 'Analyze this blueprint. Return ONLY a raw JSON array of demolition items. Example format: [{"floor":"1","category":"Flooring","description":"Ceramic tile","qty":450,"unit":"sq ft"}]. Output nothing else.',
             },
           ],
-        },
-        {
-          role: 'assistant',
-          content: '[',
         },
       ],
     };
@@ -72,24 +68,44 @@ export async function POST(request) {
     }
 
     const data = await response.json();
-    const rawText = '[' + (data.content?.[0]?.text ?? '');
+    const rawText = (data.content?.[0]?.text ?? '').trim();
 
-    console.log('Raw model response:', rawText.substring(0, 200));
+    console.log('Raw model response (first 300 chars):', rawText.substring(0, 300));
+
+    // Strip markdown code fences if present
+    const cleaned = rawText
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
 
     let items;
     try {
-      items = JSON.parse(rawText);
+      items = JSON.parse(cleaned);
     } catch {
-      const match = rawText.match(/\[[\s\S]*\]/);
+      // Try to extract a JSON array from anywhere in the text
+      const match = cleaned.match(/\[[\s\S]*\]/);
       if (match) {
         try {
           items = JSON.parse(match[0]);
         } catch {
-          return Response.json({ error: 'Failed to parse JSON from model response', raw: rawText.substring(0, 500) }, { status: 500 });
+          console.error('JSON extract failed. Raw:', rawText.substring(0, 500));
+          return Response.json({
+            error: 'Failed to parse JSON from model response',
+            raw: rawText.substring(0, 500),
+          }, { status: 500 });
         }
       } else {
-        return Response.json({ error: 'Failed to parse JSON from model response', raw: rawText.substring(0, 500) }, { status: 500 });
+        console.error('No JSON array found. Raw:', rawText.substring(0, 500));
+        return Response.json({
+          error: 'Failed to parse JSON from model response',
+          raw: rawText.substring(0, 500),
+        }, { status: 500 });
       }
+    }
+
+    if (!Array.isArray(items)) {
+      return Response.json({ error: 'Model did not return an array', raw: rawText.substring(0, 500) }, { status: 500 });
     }
 
     return Response.json({ items });
