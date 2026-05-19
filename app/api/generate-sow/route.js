@@ -26,7 +26,7 @@ Write a professional contractor Statement of Work with these sections:
 Use clear, professional contractor language. Be specific about quantities and materials.`;
 
     const body = {
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1000,
       messages: [
         {

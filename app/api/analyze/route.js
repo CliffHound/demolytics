@@ -27,7 +27,7 @@ export async function POST(request) {
         };
 
     const body = {
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2000,
       system:
         'You are analyzing a commercial building floor plan for a demolition and junk removal contractor. Identify every item that would need to be demolished or hauled away, organized by floor. For each item extract: floor (string), category (one of: Flooring, Drywall/Walls, Ceiling, Cabinetry, Doors, Windows, Fixtures, Other), description (string), qty (number), unit (sq ft, linear ft, or units). You MUST return ONLY a raw JSON array. No markdown, no code blocks, no backticks, no explanation. Just the JSON array.',
